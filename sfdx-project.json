@@ -1,12 +1,21 @@
 {
   "packageDirectories": [
     {
+      "versionName": "ver 1.0.0",
+      "versionNumber": "1.0.0.NEXT",
       "path": "force-app",
-      "default": true
+      "default": true,
+      "package": "ApexLINQ",
+      "versionDescription": ""
     }
   ],
   "name": "ApexLINQ",
   "namespace": "",
   "sfdcLoginUrl": "https://login.salesforce.com",
-  "sourceApiVersion": "64.0"
+  "sourceApiVersion": "64.0",
+  "packageAliases": {
+    "ApexLINQ": "0HoGC000000Cb3Q0AS",
+    "ApexLINQ@0.1.0-1": "04tGC000007TPsqYAG",
+    "ApexLINQ@1.0.0-1": "04tGC000007TPsvYAG"
+  }
 }
