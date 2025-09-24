@@ -176,20 +176,17 @@ for (Q.Aggregate aggregate : results) {
 
 ### 3.1 List
 
-The `toList()` method returns different types of results depending on whether a rollup operation is applied:
+The `toList()` method returns different types of results depending on whether a rollup operation is used:
 
-- With rollup, `toList()` returns a list of aggregated results. Each entry contains the group keys and their corresponding summary values.
-- Without rollup, `toList()` returns a list of the original records, which may be filtered or sorted as specified.
+- If a rollup is applied, `toList()` returns a list of aggregated results. Each entry contains the group keys and their corresponding summary values.
+- If no rollup is applied, `toList()` returns a list of the original records, which may be filtered or sorted as specified.
 
 ```java
 // With rollup
-List<Map<List<Object>, Map<String, Object>>> results =
-    (List<Map<List<Object>, Map<String, Object>>>) Q.of(accounts)
-        .rollup(rollup).toList();
+List<Q.Aggregate> results = (List<Q.Aggregate>) Q.of(accounts).rollup(rollup).toList();
 
 // Without rollup
-List<Account> results = (List<Account>) Q.of(accounts)
-    .filter(filter).toList();
+List<Account> results = (List<Account>) Q.of(accounts).filter(filter).toList();
 ```
 
 ### 3.2 Map
@@ -205,7 +202,7 @@ public class AccountMapper implements Q.Mapper {
 }
 ```
 
-Apply the mapper using `toList(Q.Mapper, Type)`. For example, to get a list of account names:
+Apply the mapper using `toList(Q.Mapper, Type)`, providing the target type as the second parameter. For example, to obtain a list of account names:
 
 ```java
 Q.Filter filter = new AccountFilter();
