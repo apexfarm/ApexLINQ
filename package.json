@@ -1,8 +1,8 @@
 {
-  "name": "salesforce-app",
+  "name": "apex-linq",
   "private": true,
   "version": "1.0.0",
-  "description": "Salesforce App",
+  "description": "Apex LINQ",
   "scripts": {
     "prettier": "prettier --write \"**/*.{cls,cmp,component,css,html,js,json,md,page,trigger,xml,yaml,yml}\"",
     "prettier:verify": "prettier --check \"**/*.{cls,cmp,component,css,html,js,json,md,page,trigger,xml,yaml,yml}\"",

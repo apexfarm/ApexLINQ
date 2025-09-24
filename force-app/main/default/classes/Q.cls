@@ -1,727 +1,291 @@
-public virtual class Q {
+/**
+ * Copyright 2025 Jeff Jin
+ * https://github.com/apexfarm/ApexDI
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+public virtual class Q implements IQ {
+    private interface IQ {
+        List<Object> toList();
+        List<Object> toList(Mapper mapper, Type mapToType);
+        Object reduce(Reducer reducer, Object initialState);
+        List<Object> toDiff(Differ differ, List<Object> toRecords);
+
+        Q filter(Filter filter);
+        Q sortBy(Sorter sorter);
+        Q rollup(Rollup rollup);
+        Q take(Integer count);
+        Q skip(Integer count);
+        Q tail(Integer count);
+        Q slice(Integer startIndex, Integer endIndex);
+    }
+
+    public interface Reducer {
+        Object reduce(Object state, Object record);
+    }
+
+    public interface Mapper {
+        Object convert(Object record);
+    }
+
+    public interface Differ {
+        Boolean changed(Object fromRecord, Object toRecord);
+    }
+
+    public interface Joiner {
+        Boolean canJoin(Object record, Object innerRecord);
+    }
+
     public interface Filter {
-        Boolean matches(SObject record);
+        Boolean matches(Object record);
     }
 
-    public interface LogicalFilter extends Filter {
-        LogicalFilter add(Filter filter);
+    public interface Sorter {
+        Integer compare(Object arg1, Object arg2);
     }
 
-    public class AndFilter implements LogicalFilter {
-        private List<Filter> filters = new List<Filter>();
+    public interface Rollup {
+        List<Object> getKeys(Object record);
+        Map<String, Object> summary(List<Object> mapKeys, List<Object> records);
+    }
 
-        public LogicalFilter add(Filter filter) {
-            filters.add(filter);
-            return this;
-        }
+    public interface Aggregate {
+        List<Object> getKeys();
+        Map<String, Object> getSummary();
+        Object getKeyAt(Integer position);
+        Object getValue(String fieldName);
+    }
 
-        public Boolean matches(SObject record) {
-            for (Filter filter : filters) {
-                if (!filter.matches(record)) {
-                    return false;
+    public static Q of(List<SObject> records) {
+        Q q = new Q();
+        q.init(records, SObject.class);
+        return q;
+    }
+
+    public static Q of(List<Object> records, Type listItemType) {
+        Q q = new Q();
+        q.init(records, listItemType);
+        return q;
+    }
+
+    // =================
+    // #region Transform
+
+    private List<Object> records { get; set; }
+    private Type listItemType { get; set; }
+
+    private void init(List<Object> records, Type ListItemType) {
+        this.listItemType = ListItemType;
+        this.records = new List<Object>(records);
+    }
+
+    public Q filter(Filter filter) {
+        if (filter != null) {
+            List<Object> filteredRecords = new List<Object>();
+            for (Object record : this.records) {
+                if (filter.matches(record)) {
+                    filteredRecords.add(record);
                 }
             }
-            return true;
+            this.records = filteredRecords;
         }
-    }
-
-    public static LogicalFilter andx() {
-        return new AndFilter();
-    }
-
-    private interface DataType {
-        void forField(String fieldName);
-    }
-
-    private List<SObject> records { get; set; }
-    private Filter filter { get; set; }
-
-    public Q() {
-        this.records = new List<SObject>();
-    }
-
-    private Q(List<SObject> records) {
-        this.records = records;
-    }
-
-    public static Q Q(List<SObject> records) {
-        return new Q(records);
-    }
-
-    public Q whereBy(Filter filter) {
-        this.filter = filter;
         return this;
     }
 
-    public List<SObject> toList() {
-        List<SObject> filteredRecords = new List<SObject>();
-        for (SObject record : records) {
-            if (filter.matches(record)) {
-                filteredRecords.add(record);
+    public Q sortBy(Sorter sorter) {
+        if (sorter != null) {
+            records.sort(new SObjectComparator(sorter));
+        }
+        return this;
+    }
+
+    public Q rollup(Rollup rollup) {
+        if (rollup != null) {
+            Map<List<Object>, List<Object>> groups = new Map<List<Object>, List<Object>>();
+            for (Object record : this.records) {
+                List<Object> keys = rollup.getKeys(record);
+                if (!groups.containsKey(keys)) {
+                    groups.put(keys, new List<Object>());
+                }
+                groups.get(keys).add(record);
+            }
+            List<Aggregate> rolledUpRecords = new List<Aggregate>();
+            for (List<Object> key : groups.keySet()) {
+                Map<String, Object> summary = rollup.summary(key, groups.get(key));
+                rolledUpRecords.add(new AggregateImpl(key, summary));
+            }
+            this.listItemType = Aggregate.class;
+            this.records = rolledUpRecords;
+        }
+        return this;
+    }
+
+    public Q skip(Integer count) {
+        if (count != null && count > 0) {
+            List<Object> result = new List<Object>();
+            for (Integer i = count; i < records.size(); i++) {
+                result.add(records[i]);
+            }
+            records = result;
+        }
+        return this;
+    }
+
+    public Q take(Integer count) {
+        List<Object> result = new List<Object>();
+        if (count != null && count > 0) {
+            Integer upper = Math.min(count, records.size());
+            for (Integer i = 0; i < upper; i++) {
+                result.add(records[i]);
             }
         }
-        return filteredRecords;
+        records = result;
+        return this;
     }
 
-    // ==============
-    // #region Double
-
-    private static DoubleDataType doubleDataType {
-        get {
-            if (doubleDataType == null) {
-                doubleDataType = new DoubleDataTypeImpl();
+    public Q tail(Integer count) {
+        List<Object> result = new List<Object>();
+        if (count != null && count > 0) {
+            Integer upper = records.size();
+            for (Integer i = Math.max(0, records.size() - count); i < upper; i++) {
+                result.add(records[i]);
             }
-            return doubleDataType;
         }
-        set;
+        records = result;
+        return this;
     }
 
-    public static DoubleDataType forDouble(String fieldName) {
-        DoubleDataType dt = doubleDataType;
-        dt.forField(fieldName);
-        return dt;
-    }
-
-    public interface DoubleDataType extends DataType {
-        Filter gt(Double value);
-        Filter gte(Double value);
-        Filter lt(Double value);
-        Filter lte(Double value);
-        Filter eq(Double value);
-        Filter ne(Double value);
-        Filter inx(List<Double> values);
-        Filter nin(List<Double> values);
-        Filter between(Double startValue, Double endValue);
-    }
-
-    private class DoubleGreaterThanFilter implements Filter {
-        private String fieldName;
-        private Double value;
-
-        public DoubleGreaterThanFilter(String fieldName, Double value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return (Double) record.get(fieldName) > value;
-        }
-    }
-
-    private class DoubleLessThanFilter implements Filter {
-        private String fieldName;
-        private Double value;
-
-        public DoubleLessThanFilter(String fieldName, Double value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return (Double) record.get(fieldName) < value;
-        }
-    }
-
-    private class DoubleEqualToFilter implements Filter {
-        private String fieldName;
-        private Double value;
-
-        public DoubleEqualToFilter(String fieldName, Double value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return ((Double) record.get(fieldName)) == value;
-        }
-    }
-
-    private class DoubleGreaterThanOrEqualToFilter implements Filter {
-        private String fieldName;
-        private Double value;
-
-        public DoubleGreaterThanOrEqualToFilter(String fieldName, Double value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return (Double) record.get(fieldName) >= value;
-        }
-    }
-
-    private class DoubleLessThanOrEqualToFilter implements Filter {
-        private String fieldName;
-        private Double value;
-
-        public DoubleLessThanOrEqualToFilter(String fieldName, Double value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return (Double) record.get(fieldName) <= value;
-        }
-    }
-
-    private class DoubleNotEqualToFilter implements Filter {
-        private String fieldName;
-        private Double value;
-
-        public DoubleNotEqualToFilter(String fieldName, Double value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return ((Double) record.get(fieldName)) != value;
-        }
-    }
-
-    private class DoubleInFilter implements Filter {
-        private String fieldName;
-        private List<Double> values;
-
-        public DoubleInFilter(String fieldName, List<Double> values) {
-            this.fieldName = fieldName;
-            this.values = values;
-        }
-
-        public Boolean matches(SObject record) {
-            return values.contains((Double) record.get(fieldName));
-        }
-    }
-
-    private class DoubleNotInFilter implements Filter {
-        private String fieldName;
-        private List<Double> values;
-
-        public DoubleNotInFilter(String fieldName, List<Double> values) {
-            this.fieldName = fieldName;
-            this.values = values;
-        }
-
-        public Boolean matches(SObject record) {
-            return !values.contains((Double) record.get(fieldName));
-        }
-    }
-
-    private class DoubleBetweenFilter implements Filter {
-        private String fieldName;
-        private Double startValue;
-        private Double endValue;
-
-        public DoubleBetweenFilter(String fieldName, Double startValue, Double endValue) {
-            this.fieldName = fieldName;
-            this.startValue = startValue;
-            this.endValue = endValue;
-        }
-
-        public Boolean matches(SObject record) {
-            Double value = (Double) record.get(fieldName);
-            return value >= startValue && value <= endValue;
-        }
-    }
-
-    private class DoubleDataTypeImpl implements DoubleDataType {
-        private String fieldName;
-
-        public void forField(String fieldName) {
-            this.fieldName = fieldName;
-        }
-
-        public Filter gt(Double value) {
-            return new DoubleGreaterThanFilter(fieldName, value);
-        }
-
-        public Filter gte(Double value) {
-            return new DoubleGreaterThanOrEqualToFilter(fieldName, value);
-        }
-
-        public Filter lt(Double value) {
-            return new DoubleLessThanFilter(fieldName, value);
-        }
-
-        public Filter lte(Double value) {
-            return new DoubleLessThanOrEqualToFilter(fieldName, value);
-        }
-
-        public Filter eq(Double value) {
-            return new DoubleEqualToFilter(fieldName, value);
-        }
-
-        public Filter ne(Double value) {
-            return new DoubleNotEqualToFilter(fieldName, value);
-        }
-
-        public Filter inx(List<Double> values) {
-            return new DoubleInFilter(fieldName, values);
-        }
-
-        public Filter nin(List<Double> values) {
-            return new DoubleNotInFilter(fieldName, values);
-        }
-
-        public Filter between(Double startValue, Double endValue) {
-            return new DoubleBetweenFilter(fieldName, startValue, endValue);
-        }
-    }
-
-    // ==============
-    // #region Integer
-
-    private static IntegerDataType integerDataType {
-        get {
-            if (integerDataType == null) {
-                integerDataType = new IntegerDataTypeImpl();
+    public Q slice(Integer startIndex, Integer endIndex) {
+        Integer size = records.size();
+        Integer fromIndex = (startIndex == null || startIndex < 0) ? 0 : startIndex;
+        Integer toIndex = (endIndex == null || endIndex > size) ? size : endIndex;
+        List<Object> result = new List<Object>();
+        if (fromIndex < toIndex) {
+            for (Integer i = fromIndex; i < toIndex; i++) {
+                result.add(records[i]);
             }
-            return integerDataType;
         }
-        set;
+        records = result;
+        return this;
     }
 
-    public static IntegerDataType forInteger(String fieldName) {
-        IntegerDataType dt = integerDataType;
-        dt.forField(fieldName);
-        return dt;
+    // #endregion
+    // =================
+
+    // =================
+    // #region Resulting
+
+    private List<Object> newList(Type listItemType) {
+        String listTypeName = 'List<' + listItemType.getName() + '>';
+        System.debug('listTypeName: ' + listTypeName);
+        Type listType = Type.forName(listTypeName);
+        return (List<Object>) listType.newInstance();
     }
 
-    public interface IntegerDataType extends DataType {
-        Filter gt(Integer value);
-        Filter gte(Integer value);
-        Filter lt(Integer value);
-        Filter lte(Integer value);
-        Filter eq(Integer value);
-        Filter ne(Integer value);
-        Filter inx(List<Integer> values);
-        Filter nin(List<Integer> values);
-        Filter between(Integer startValue, Integer endValue);
+    public List<Object> toDiff(Differ differ, List<Object> toRecords) {
+        List<Object> diffRecords = newList(this.listItemType);
+        if (differ == null || toRecords == null || toRecords.isEmpty()) {
+            return diffRecords;
+        }
+
+        if (toRecords.size() != this.records.size()) {
+            throw new IllegalArgumentException(
+                'The size of toRecords must be the same as the size of the original records.'
+            );
+        }
+
+        for (Integer i = 0; i < toRecords.size(); i++) {
+            Object toRecord = toRecords[i];
+            Object fromRecord = this.records[i];
+            if (differ.changed(fromRecord, toRecord)) {
+                diffRecords.add(fromRecord);
+            }
+        }
+
+        return diffRecords;
     }
 
-    private class IntegerGreaterThanFilter implements Filter {
-        private String fieldName;
-        private Integer value;
-
-        public IntegerGreaterThanFilter(String fieldName, Integer value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return (Integer) record.get(fieldName) > value;
-        }
+    public List<Object> toList() {
+        List<Object> records = newList(this.listItemType);
+        records.addAll(this.records);
+        return records;
     }
 
-    private class IntegerLessThanFilter implements Filter {
-        private String fieldName;
-        private Integer value;
+    public List<Object> toList(Mapper mapper, Type mapToType) {
+        List<Object> records = newList(mapToType);
 
-        public IntegerLessThanFilter(String fieldName, Integer value) {
-            this.fieldName = fieldName;
-            this.value = value;
+        for (Object record : this.records) {
+            records.add(mapper.convert(record));
         }
 
-        public Boolean matches(SObject record) {
-            return (Integer) record.get(fieldName) < value;
-        }
+        return records;
     }
 
-    private class IntegerEqualToFilter implements Filter {
-        private String fieldName;
-        private Integer value;
-
-        public IntegerEqualToFilter(String fieldName, Integer value) {
-            this.fieldName = fieldName;
-            this.value = value;
+    public Object reduce(Reducer reducer, Object initialState) {
+        Object state = initialState;
+        for (Object record : this.records) {
+            state = reducer.reduce(state, record);
         }
-
-        public Boolean matches(SObject record) {
-            return ((Integer) record.get(fieldName)) == value;
-        }
+        return state;
     }
 
-    private class IntegerGreaterThanOrEqualToFilter implements Filter {
-        private String fieldName;
-        private Integer value;
+    // #endregion
+    // =================
 
-        public IntegerGreaterThanOrEqualToFilter(String fieldName, Integer value) {
-            this.fieldName = fieldName;
-            this.value = value;
+    // ==========================
+    // #region Supproting Classes
+
+    private class AggregateImpl implements Aggregate {
+        private List<Object> keys { get; set; }
+        private Map<String, Object> summary { get; set; }
+
+        private AggregateImpl(List<Object> keys, Map<String, Object> summary) {
+            this.keys = keys;
+            this.summary = summary;
         }
 
-        public Boolean matches(SObject record) {
-            return (Integer) record.get(fieldName) >= value;
-        }
-    }
-
-    private class IntegerLessThanOrEqualToFilter implements Filter {
-        private String fieldName;
-        private Integer value;
-
-        public IntegerLessThanOrEqualToFilter(String fieldName, Integer value) {
-            this.fieldName = fieldName;
-            this.value = value;
+        public List<Object> getKeys() {
+            return keys;
         }
 
-        public Boolean matches(SObject record) {
-            return (Integer) record.get(fieldName) <= value;
-        }
-    }
-
-    private class IntegerNotEqualToFilter implements Filter {
-        private String fieldName;
-        private Integer value;
-
-        public IntegerNotEqualToFilter(String fieldName, Integer value) {
-            this.fieldName = fieldName;
-            this.value = value;
+        public Map<String, Object> getSummary() {
+            return summary;
         }
 
-        public Boolean matches(SObject record) {
-            return ((Integer) record.get(fieldName)) != value;
+        public Object getKeyAt(Integer position) {
+            return keys[position];
+        }
+
+        public Object getValue(String fieldName) {
+            return summary.get(fieldName);
         }
     }
 
-    private class IntegerInFilter implements Filter {
-        private String fieldName;
-        private List<Integer> values;
+    @TestVisible
+    private class SObjectComparator implements Comparator<Object> {
+        private Sorter sorter { get; set; }
 
-        public IntegerInFilter(String fieldName, List<Integer> values) {
-            this.fieldName = fieldName;
-            this.values = values;
+        @TestVisible
+        private SObjectComparator(Sorter sorter) {
+            this.sorter = sorter;
         }
 
-        public Boolean matches(SObject record) {
-            return values.contains((Integer) record.get(fieldName));
-        }
-    }
-
-    private class IntegerNotInFilter implements Filter {
-        private String fieldName;
-        private List<Integer> values;
-
-        public IntegerNotInFilter(String fieldName, List<Integer> values) {
-            this.fieldName = fieldName;
-            this.values = values;
-        }
-
-        public Boolean matches(SObject record) {
-            return !values.contains((Integer) record.get(fieldName));
-        }
-    }
-
-    private class IntegerBetweenFilter implements Filter {
-        private String fieldName;
-        private Integer startValue;
-        private Integer endValue;
-
-        public IntegerBetweenFilter(String fieldName, Integer startValue, Integer endValue) {
-            this.fieldName = fieldName;
-            this.startValue = startValue;
-            this.endValue = endValue;
-        }
-
-        public Boolean matches(SObject record) {
-            Integer value = (Integer) record.get(fieldName);
-            return value >= startValue && value <= endValue;
-        }
-    }
-
-    private class IntegerDataTypeImpl implements IntegerDataType {
-        private String fieldName;
-
-        public void forField(String fieldName) {
-            this.fieldName = fieldName;
-        }
-
-        public Filter gt(Integer value) {
-            return new IntegerGreaterThanFilter(fieldName, value);
-        }
-
-        public Filter gte(Integer value) {
-            return new IntegerGreaterThanOrEqualToFilter(fieldName, value);
-        }
-
-        public Filter lt(Integer value) {
-            return new IntegerLessThanFilter(fieldName, value);
-        }
-
-        public Filter lte(Integer value) {
-            return new IntegerLessThanOrEqualToFilter(fieldName, value);
-        }
-
-        public Filter eq(Integer value) {
-            return new IntegerEqualToFilter(fieldName, value);
-        }
-
-        public Filter ne(Integer value) {
-            return new IntegerNotEqualToFilter(fieldName, value);
-        }
-
-        public Filter inx(List<Integer> values) {
-            return new IntegerInFilter(fieldName, values);
-        }
-
-        public Filter nin(List<Integer> values) {
-            return new IntegerNotInFilter(fieldName, values);
-        }
-
-        public Filter between(Integer startValue, Integer endValue) {
-            return new IntegerBetweenFilter(fieldName, startValue, endValue);
+        public Integer compare(Object arg1, Object arg2) {
+            return sorter.compare(arg1, arg2);
         }
     }
 
     // #endregion
-    // ==============
-
-    // ==============
-    // #region String
-
-    private static StringDataType stringDataType {
-        get {
-            if (stringDataType == null) {
-                stringDataType = new StringDataTypeImpl();
-            }
-            return stringDataType;
-        }
-        set;
-    }
-
-    public static StringDataType forString(String fieldName) {
-        StringDataType dt = stringDataType;
-        dt.forField(fieldName);
-        return dt;
-    }
-
-    public interface StringDataType extends DataType {
-        Filter eq(String value);
-        Filter ne(String value);
-        Filter contains(String value);
-        Filter startsWith(String value);
-        Filter endsWith(String value);
-        Filter inx(List<String> values);
-        Filter nin(List<String> values);
-        // Rarely used, but available:
-        Filter gt(String value);
-        Filter gte(String value);
-        Filter lt(String value);
-        Filter lte(String value);
-    }
-
-    private class StringEqualToFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringEqualToFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return ((String) record.get(fieldName)) == value;
-        }
-    }
-
-    private class StringNotEqualToFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringNotEqualToFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            return ((String) record.get(fieldName)) != value;
-        }
-    }
-
-    private class StringContainsFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringContainsFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            String fieldValue = (String) record.get(fieldName);
-            return fieldValue != null && fieldValue.contains(value);
-        }
-    }
-
-    private class StringStartsWithFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringStartsWithFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            String fieldValue = (String) record.get(fieldName);
-            return fieldValue != null && fieldValue.startsWith(value);
-        }
-    }
-
-    private class StringEndsWithFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringEndsWithFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            String fieldValue = (String) record.get(fieldName);
-            return fieldValue != null && fieldValue.endsWith(value);
-        }
-    }
-
-    private class StringInFilter implements Filter {
-        private String fieldName;
-        private List<String> values;
-
-        public StringInFilter(String fieldName, List<String> values) {
-            this.fieldName = fieldName;
-            this.values = values;
-        }
-
-        public Boolean matches(SObject record) {
-            return values.contains((String) record.get(fieldName));
-        }
-    }
-
-    private class StringNotInFilter implements Filter {
-        private String fieldName;
-        private List<String> values;
-
-        public StringNotInFilter(String fieldName, List<String> values) {
-            this.fieldName = fieldName;
-            this.values = values;
-        }
-
-        public Boolean matches(SObject record) {
-            return !values.contains((String) record.get(fieldName));
-        }
-    }
-
-    // Lexicographical comparison filters
-    private class StringGreaterThanFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringGreaterThanFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            String fieldValue = (String) record.get(fieldName);
-            return fieldValue != null && fieldValue > value;
-        }
-    }
-
-    private class StringGreaterThanOrEqualToFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringGreaterThanOrEqualToFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            String fieldValue = (String) record.get(fieldName);
-            return fieldValue != null && fieldValue >= value;
-        }
-    }
-
-    private class StringLessThanFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringLessThanFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            String fieldValue = (String) record.get(fieldName);
-            return fieldValue != null && fieldValue < value;
-        }
-    }
-
-    private class StringLessThanOrEqualToFilter implements Filter {
-        private String fieldName;
-        private String value;
-
-        public StringLessThanOrEqualToFilter(String fieldName, String value) {
-            this.fieldName = fieldName;
-            this.value = value;
-        }
-
-        public Boolean matches(SObject record) {
-            String fieldValue = (String) record.get(fieldName);
-            return fieldValue != null && fieldValue <= value;
-        }
-    }
-
-    private class StringDataTypeImpl implements StringDataType {
-        private String fieldName;
-
-        public void forField(String fieldName) {
-            this.fieldName = fieldName;
-        }
-
-        public Filter eq(String value) {
-            return new StringEqualToFilter(fieldName, value);
-        }
-
-        public Filter ne(String value) {
-            return new StringNotEqualToFilter(fieldName, value);
-        }
-
-        public Filter contains(String value) {
-            return new StringContainsFilter(fieldName, value);
-        }
-
-        public Filter startsWith(String value) {
-            return new StringStartsWithFilter(fieldName, value);
-        }
-
-        public Filter endsWith(String value) {
-            return new StringEndsWithFilter(fieldName, value);
-        }
-
-        public Filter inx(List<String> values) {
-            return new StringInFilter(fieldName, values);
-        }
-
-        public Filter nin(List<String> values) {
-            return new StringNotInFilter(fieldName, values);
-        }
-
-        public Filter gt(String value) {
-            return new StringGreaterThanFilter(fieldName, value);
-        }
-
-        public Filter gte(String value) {
-            return new StringGreaterThanOrEqualToFilter(fieldName, value);
-        }
-
-        public Filter lt(String value) {
-            return new StringLessThanFilter(fieldName, value);
-        }
-
-        public Filter lte(String value) {
-            return new StringLessThanOrEqualToFilter(fieldName, value);
-        }
-    }
-
-    // #endregion
-    // ==============
+    // =================
 }
