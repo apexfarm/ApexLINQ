@@ -97,7 +97,7 @@ public class AccountSorter implements Q.Sorter {
 }
 ```
 
-Apply the sorter as shown below. This example returns all accounts sorted in ascending order by annual revenue.
+Apply the sorter as shown below. This example returns filtered accounts sorted in ascending order by annual revenue.
 
 ```java
 List<Account> accounts = [SELECT Name, AnnualRevenue FROM Account];
