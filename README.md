@@ -240,10 +240,10 @@ The diff operation is mainly used to compare the `Trigger.new` and `Trigger.old`
 
 ```java
 public class AccountDiffer implements Q.Differ {
-    public Boolean changed(Object oldRecord, Object newRecord) {
-        Account oldAcc = (Account) oldRecord;
-        Account newAcc = (Account) newRecord;
-        return oldAcc.AnnualRevenue != newAcc.AnnualRevenue;
+    public Boolean changed(Object fromRecord, Object toRecord) {
+        Account fromAcc = (Account) fromRecord;
+        Account toAcc = (Account) toRecord;
+        return (Double) fromAcc.AnnualRevenue != (Double) toAcc.AnnualRevenue;
     }
 }
 ```

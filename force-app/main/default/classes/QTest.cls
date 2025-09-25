@@ -436,7 +436,7 @@ public class QTest {
     }
 
     @isTest
-    static void testQ_differ() {
+    static void testQ_differ_positive() {
         List<Account> oldAccounts = new List<Account>();
         List<Account> newAccounts = new List<Account>();
         for (Integer i = 0; i < 10; i++) {
@@ -457,11 +457,29 @@ public class QTest {
         Assert.areEqual(10000, results[0].AnnualRevenue);
     }
 
+    @isTest
+    static void testQ_differ_negative() {
+        List<Account> oldAccounts = new List<Account>();
+        List<Account> newAccounts = new List<Account>();
+        for (Integer i = 0; i < 10; i++) {
+            oldAccounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 10000 + i));
+            newAccounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 10000 + i));
+        }
+
+        Q.Differ differ = new AccountDiffer();
+        List<Account> results;
+        results = (List<Account>) Q.of(newAccounts).toDiff(differ, oldAccounts);
+        Assert.areEqual(0, results.size());
+
+        results = (List<Account>) Q.of(oldAccounts).toDiff(differ, newAccounts);
+        Assert.areEqual(0, results.size());
+    }
+
     public class AccountDiffer implements Q.Differ {
         public Boolean changed(Object fromRecord, Object toRecord) {
             Account fromAcc = (Account) fromRecord;
             Account toAcc = (Account) toRecord;
-            return fromAcc.AnnualRevenue != toAcc.AnnualRevenue;
+            return (Double) fromAcc.AnnualRevenue != (Double) toAcc.AnnualRevenue;
         }
     }
     // #endregion
