@@ -115,7 +115,7 @@ Apex LINQ provides several common slicing operations. When chained, each operati
 
 ```java
 List<Account> accounts = [SELECT Name, Industry, AnnualRevenue FROM Account];
-List<Account> results = (List<Account>) Q.of(accounts, SObject.class)
+List<Account> results = (List<Account>) Q.of(accounts)
     .skip(5)      // Skip the first 5 elements and return the rest
     .take(4)      // Take the next 4 elements from the current result
     .tail(3)      // Take the last 3 elements from the current result
