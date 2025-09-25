@@ -40,7 +40,7 @@ public virtual class Q implements IQ {
     }
 
     public interface Differ {
-        Boolean changed(Object fromRecord, Object toRecord);
+        Boolean changed(Object arg1, Object arg2);
     }
 
     public interface Joiner {
@@ -189,10 +189,10 @@ public virtual class Q implements IQ {
 
         Integer minSize = Math.min(this.records.size(), toRecords.size());
         for (Integer i = 0; i < minSize; i++) {
-            Object fromRecord = this.records[i];
-            Object toRecord = toRecords[i];
-            if (differ.changed(fromRecord, toRecord)) {
-                diffRecords.add(fromRecord);
+            Object arg1 = this.records[i];
+            Object arg2 = toRecords[i];
+            if (differ.changed(arg1, arg2)) {
+                diffRecords.add(arg1);
             }
         }
 

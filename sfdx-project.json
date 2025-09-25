@@ -1,8 +1,8 @@
 {
   "packageDirectories": [
     {
-      "versionName": "ver 1.1.0",
-      "versionNumber": "1.1.0.NEXT",
+      "versionName": "ver 1.1.1",
+      "versionNumber": "1.1.1.NEXT",
       "path": "force-app",
       "default": true,
       "package": "ApexLINQ",
@@ -17,6 +17,7 @@
     "ApexLINQ": "0HoGC000000Cb3Q0AS",
     "ApexLINQ@0.1.0-1": "04tGC000007TPsqYAG",
     "ApexLINQ@1.0.0-1": "04tGC000007TPsvYAG",
-    "ApexLINQ@1.1.0-1": "04tGC000007TPtPYAW"
+    "ApexLINQ@1.1.0-1": "04tGC000007TPtPYAW",
+    "ApexLINQ@1.1.1-1": "04tGC000007TPtZYAW"
   }
 }

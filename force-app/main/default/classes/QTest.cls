@@ -471,9 +471,9 @@ public class QTest {
     }
 
     public class AccountDiffer implements Q.Differ {
-        public Boolean changed(Object fromRecord, Object toRecord) {
-            Account fromAcc = (Account) fromRecord;
-            Account toAcc = (Account) toRecord;
+        public Boolean changed(Object arg1, Object arg2) {
+            Account fromAcc = (Account) arg1;
+            Account toAcc = (Account) arg2;
             return (Double) fromAcc.AnnualRevenue != (Double) toAcc.AnnualRevenue;
         }
     }

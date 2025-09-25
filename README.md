@@ -1,13 +1,13 @@
 # Apex LINQ
 
-![](https://img.shields.io/badge/version-1.1.0-brightgreen.svg) ![](https://img.shields.io/badge/build-passing-brightgreen.svg) ![](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
+![](https://img.shields.io/badge/version-1.1.1-brightgreen.svg) ![](https://img.shields.io/badge/build-passing-brightgreen.svg) ![](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
 
 Apex LINQ is a high-performance Salesforce LINQ library designed to work seamlessly with object collections, delivering performance close to native operations. For optimal results, refer to the guidelines in [Apex CPU Limit Optimization](https://medium.com/@jeff.jianfeng.jin/apex-cpu-limit-optimization-9451e9c4b79c).
 
 | Environment           | Installation Link                                                                                                                                         | Version   |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| Production, Developer | <a target="_blank" href="https://login.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPtPYAW"><img src="docs/images/deploy-button.png"></a> | ver 1.1.0 |
-| Sandbox               | <a target="_blank" href="https://test.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPtPYAW"><img src="docs/images/deploy-button.png"></a>  | ver 1.1.0 |
+| Production, Developer | <a target="_blank" href="https://login.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPtZYAW"><img src="docs/images/deploy-button.png"></a> | ver 1.1.1 |
+| Sandbox               | <a target="_blank" href="https://test.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPtZYAW"><img src="docs/images/deploy-button.png"></a>  | ver 1.1.1 |
 
 ---
 
@@ -178,10 +178,10 @@ The diff operation is mainly used to compare the `Trigger.new` and `Trigger.old`
 
 ```java
 public class AccountDiffer implements Q.Differ {
-    public Boolean changed(Object fromRecord, Object toRecord) {
-        Account fromAcc = (Account) fromRecord;
-        Account toAcc = (Account) toRecord;
-        return (Double) fromAcc.AnnualRevenue != (Double) toAcc.AnnualRevenue;
+    public Boolean changed(Object arg1, Object arg2) {
+        Double revenue1 = ((Account) arg1).AnnualRevenue;
+        Double revenue2 = ((Account) arg2).AnnualRevenue;
+        return revenue1 != revenue2;
     }
 }
 ```
