@@ -20,8 +20,8 @@ public virtual class Q implements IQ {
         List<Object> toList();
         List<Object> toList(Mapper mapper, Type mapToType);
         Object reduce(Reducer reducer, Object initialState);
-        List<Object> toDiff(Differ differ, List<Object> toRecords);
 
+        Q diff(Differ differ, List<Object> toRecords);
         Q filter(Filter filter);
         Q sortBy(Sorter sorter);
         Q rollup(Rollup rollup);
@@ -180,6 +180,26 @@ public virtual class Q implements IQ {
         return this;
     }
 
+    public Q diff(Differ differ, List<Object> toRecords) {
+        List<Object> diffRecords = new List<Object>();
+        if (differ == null || toRecords == null) {
+            this.records = diffRecords;
+            return this;
+        }
+
+        Integer minSize = Math.min(this.records.size(), toRecords.size());
+        for (Integer i = 0; i < minSize; i++) {
+            Object fromRecord = this.records[i];
+            Object toRecord = toRecords[i];
+            if (differ.changed(fromRecord, toRecord)) {
+                diffRecords.add(fromRecord);
+            }
+        }
+
+        this.records = diffRecords;
+        return this;
+    }
+
     // #endregion
     // =================
 
@@ -191,29 +211,6 @@ public virtual class Q implements IQ {
         System.debug('listTypeName: ' + listTypeName);
         Type listType = Type.forName(listTypeName);
         return (List<Object>) listType.newInstance();
-    }
-
-    public List<Object> toDiff(Differ differ, List<Object> toRecords) {
-        List<Object> diffRecords = newList(this.listItemType);
-        if (differ == null || toRecords == null || toRecords.isEmpty()) {
-            return diffRecords;
-        }
-
-        if (toRecords.size() != this.records.size()) {
-            throw new IllegalArgumentException(
-                'The size of toRecords must be the same as the size of the original records.'
-            );
-        }
-
-        for (Integer i = 0; i < toRecords.size(); i++) {
-            Object toRecord = toRecords[i];
-            Object fromRecord = this.records[i];
-            if (differ.changed(fromRecord, toRecord)) {
-                diffRecords.add(fromRecord);
-            }
-        }
-
-        return diffRecords;
     }
 
     public List<Object> toList() {

@@ -88,11 +88,7 @@ public class QTest {
     public class AccountFilter implements Q.Filter {
         public Boolean matches(Object record) {
             Account acc = (Account) record;
-            return acc.Name.startsWith('Account') &&
-                acc.Name.startsWith('Account') &&
-                acc.Name.startsWith('Account') &&
-                acc.Name.startsWith('Account') &&
-                (Double) acc.AnnualRevenue > 0;
+            return acc.Name.startsWith('Account') && (Double) acc.AnnualRevenue > 0;
         }
     }
 
@@ -408,7 +404,8 @@ public class QTest {
     @isTest
     static void testQ_differ_triggers() {
         Q.Differ differ = new AccountDiffer();
-        List<Account> results = (List<Account>) Q.of(Trigger.new).toDiff(differ, Trigger.old);
+        Q.Filter filter = new AccountFilter();
+        List<Account> results = (List<Account>) Q.of(Trigger.new).diff(differ, Trigger.old).filter(filter).toList();
         Assert.areEqual(0, results.size());
     }
 
@@ -423,16 +420,12 @@ public class QTest {
         for (Integer i = 0; i < 2; i++) {
             newAccounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 20000 + i));
         }
+
         Q.Differ differ = new AccountDiffer();
-
-        Exception exp;
-        try {
-            List<Account> results = (List<Account>) Q.of(oldAccounts).toDiff(differ, newAccounts);
-        } catch (Exception ex) {
-            exp = ex;
-        }
-
-        Assert.isNotNull(exp);
+        Q.Filter filter = new AccountFilter();
+        List<Account> results = (List<Account>) Q.of(oldAccounts).diff(differ, newAccounts).filter(filter).toList();
+        Assert.areEqual(1, results.size());
+        Assert.areEqual(10000, results[0].AnnualRevenue);
     }
 
     @isTest
@@ -445,13 +438,14 @@ public class QTest {
         }
 
         Q.Differ differ = new AccountDiffer();
+        Q.Filter filter = new AccountFilter();
         List<Account> results;
-        results = (List<Account>) Q.of(newAccounts).toDiff(differ, oldAccounts);
+        results = (List<Account>) Q.of(newAccounts).diff(differ, oldAccounts).filter(filter).toList();
 
         Assert.areEqual(10, results.size());
         Assert.areEqual(20000, results[0].AnnualRevenue);
 
-        results = (List<Account>) Q.of(oldAccounts).toDiff(differ, newAccounts);
+        results = (List<Account>) Q.of(oldAccounts).diff(differ, newAccounts).filter(filter).toList();
 
         Assert.areEqual(10, results.size());
         Assert.areEqual(10000, results[0].AnnualRevenue);
@@ -467,11 +461,12 @@ public class QTest {
         }
 
         Q.Differ differ = new AccountDiffer();
+        Q.Filter filter = new AccountFilter();
         List<Account> results;
-        results = (List<Account>) Q.of(newAccounts).toDiff(differ, oldAccounts);
+        results = (List<Account>) Q.of(newAccounts).diff(differ, oldAccounts).filter(filter).toList();
         Assert.areEqual(0, results.size());
 
-        results = (List<Account>) Q.of(oldAccounts).toDiff(differ, newAccounts);
+        results = (List<Account>) Q.of(oldAccounts).diff(differ, newAccounts).filter(filter).toList();
         Assert.areEqual(0, results.size());
     }
 

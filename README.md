@@ -1,13 +1,13 @@
 # Apex LINQ
 
-![](https://img.shields.io/badge/version-1.0.0-brightgreen.svg) ![](https://img.shields.io/badge/build-passing-brightgreen.svg) ![](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
+![](https://img.shields.io/badge/version-1.1.0-brightgreen.svg) ![](https://img.shields.io/badge/build-passing-brightgreen.svg) ![](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
 
 Apex LINQ is a high-performance Salesforce LINQ library designed to work seamlessly with object collections, delivering performance close to native operations. For optimal results, refer to the guidelines in [Apex CPU Limit Optimization](https://medium.com/@jeff.jianfeng.jin/apex-cpu-limit-optimization-9451e9c4b79c).
 
 | Environment           | Installation Link                                                                                                                                         | Version   |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| Production, Developer | <a target="_blank" href="https://login.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPsvYAG"><img src="docs/images/deploy-button.png"></a> | ver 1.0.0 |
-| Sandbox               | <a target="_blank" href="https://test.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPsvYAG"><img src="docs/images/deploy-button.png"></a>  | ver 1.0.0 |
+| Production, Developer | <a target="_blank" href="https://login.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPtPYAW"><img src="docs/images/deploy-button.png"></a> | ver 1.1.0 |
+| Sandbox               | <a target="_blank" href="https://test.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPtPYAW"><img src="docs/images/deploy-button.png"></a>  | ver 1.1.0 |
 
 ---
 
@@ -21,11 +21,11 @@ Apex LINQ is a high-performance Salesforce LINQ library designed to work seamles
   - [2.2 Sort](#22-sort)
   - [2.3 Slicing](#23-slicing)
   - [2.4 Rollup](#24-rollup)
+  - [2.5 Diff](#25-diff)
 - [3. Result Operations](#3-result-operations)
   - [3.1 List](#31-list)
   - [3.2 Map](#32-map)
   - [3.3 Reduce](#33-reduce)
-  - [3.4 Diff](#34-diff)
 - [4. License](#4-license)
 
 ## 1. Collection Types
@@ -172,6 +172,31 @@ for (Q.Aggregate aggregate : results) {
 }
 ```
 
+### 2.5 Diff
+
+The diff operation is mainly used to compare the `Trigger.new` and `Trigger.old` lists to identify records that have changed. Diff compares two lists of equal length, matching records by their position in the list.
+
+```java
+public class AccountDiffer implements Q.Differ {
+    public Boolean changed(Object fromRecord, Object toRecord) {
+        Account fromAcc = (Account) fromRecord;
+        Account toAcc = (Account) toRecord;
+        return (Double) fromAcc.AnnualRevenue != (Double) toAcc.AnnualRevenue;
+    }
+}
+```
+
+Apply the differ as shown below. You can compare `Trigger.new` with `Trigger.old` or vice versa, depending on which set of changed records you want to retrieve. You can also further filter the changed records.
+
+```java
+Q.Differ differ = new AccountDiffer();
+Q.Filter filter = new AccountFilter();
+List<Account> newList = (List<Account>) Q.of(Trigger.new).diff(differ, Trigger.old)
+    .filter(filter).toList();
+List<Account> oldList = (List<Account>) Q.of(Trigger.old).diff(differ, Trigger.new)
+    .filter(filter).toList();
+```
+
 ## 3. Result Operations
 
 ### 3.1 List
@@ -232,28 +257,6 @@ List<Account> accounts = [SELECT Name, Industry, AnnualRevenue FROM Account];
 Q.Filter filter = new AccountFilter();
 Q.Reducer reducer = new AccountReducer();
 Double result = (Double) Q.of(accounts).filter(filter).reduce(reducer, 0.0);
-```
-
-### 3.4 Diff
-
-The diff operation is mainly used to compare the `Trigger.new` and `Trigger.old` lists to identify records that have changed. Diff compares two lists of the same size, matching records by their position in the list.
-
-```java
-public class AccountDiffer implements Q.Differ {
-    public Boolean changed(Object fromRecord, Object toRecord) {
-        Account fromAcc = (Account) fromRecord;
-        Account toAcc = (Account) toRecord;
-        return (Double) fromAcc.AnnualRevenue != (Double) toAcc.AnnualRevenue;
-    }
-}
-```
-
-Apply the differ as shown below. You can compare `Trigger.new` with `Trigger.old` or vice versa, depending on which set of changed records you want to retrieve.
-
-```java
-Q.Differ differ = new AccountDiffer();
-List<Account> newList = (List<Account>) Q.of(Trigger.new).toDiff(differ, Trigger.old);
-List<Account> oldList = (List<Account>) Q.of(Trigger.old).toDiff(differ, Trigger.new);
 ```
 
 ## 4. License
