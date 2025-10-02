@@ -24,7 +24,7 @@ Apex LINQ is a high-performance Salesforce LINQ library designed to work seamles
   - [2.5 Diff](#25-diff)
 - [3. Result Operations](#3-result-operations)
   - [3.1 List](#31-list)
-  - [3.2 Map](#32-map)
+  - [3.2 Mapper](#32-mapper)
   - [3.3 Reduce](#33-reduce)
 - [4. License](#4-license)
 
@@ -214,7 +214,7 @@ List<Q.Aggregate> results = (List<Q.Aggregate>) Q.of(accounts).rollup(rollup).to
 List<Account> results = (List<Account>) Q.of(accounts).filter(filter).toList();
 ```
 
-### 3.2 Map
+### 3.2 Mapper
 
 To transform each record in a collection, implement the `Q.Mapper` interface.
 

@@ -19,6 +19,7 @@ public virtual class Q implements IQ {
     private interface IQ {
         List<Object> toList();
         List<Object> toList(Mapper mapper, Type mapToType);
+        Dictionary toDict(MapKey mapKey);
         Object reduce(Reducer reducer, Object initialState);
 
         Q diff(Differ differ, List<Object> toRecords);
@@ -39,10 +40,6 @@ public virtual class Q implements IQ {
         Object convert(Object record);
     }
 
-    public interface Differ {
-        Boolean changed(Object arg1, Object arg2);
-    }
-
     public interface Joiner {
         Boolean canJoin(Object record, Object innerRecord);
     }
@@ -51,21 +48,42 @@ public virtual class Q implements IQ {
         Boolean matches(Object record);
     }
 
-    public interface Sorter {
+    public interface Sorter extends Comparator<Object> {
         Integer compare(Object arg1, Object arg2);
     }
 
-    public interface Rollup {
+    public interface MapKey {
         List<Object> getKeys(Object record);
-        Map<String, Object> summary(List<Object> mapKeys, List<Object> records);
+    }
+
+    public interface Rollup extends MapKey {
+        Map<String, Object> summary(List<Object> keys, List<Object> records);
+    }
+
+    public interface Differ {
+        Boolean changed(Object arg1, Object arg2);
     }
 
     public interface Aggregate {
         List<Object> getKeys();
+        List<Object> getRecords();
         Map<String, Object> getSummary();
         Object getKeyAt(Integer position);
         Object getValue(String fieldName);
     }
+
+    public interface Dictionary {
+        Integer size();
+        Boolean isEmpty();
+        Set<List<Object>> keySet();
+        List<Object> getRecords(List<Object> keys);
+        Boolean containsKey(List<Object> keys);
+    }
+
+    // ======================
+    // #region Static Factory
+
+    private static Collection COLLECTION = new Collection();
 
     public static Q of(List<SObject> records) {
         Q q = new Q();
@@ -78,6 +96,9 @@ public virtual class Q implements IQ {
         q.init(records, listItemType);
         return q;
     }
+
+    // #endregion
+    // ======================
 
     // =================
     // #region Transform
@@ -105,7 +126,7 @@ public virtual class Q implements IQ {
 
     public Q sortBy(Sorter sorter) {
         if (sorter != null) {
-            records.sort(new SObjectComparator(sorter));
+            records.sort(sorter);
         }
         return this;
     }
@@ -115,15 +136,19 @@ public virtual class Q implements IQ {
             Map<List<Object>, List<Object>> groups = new Map<List<Object>, List<Object>>();
             for (Object record : this.records) {
                 List<Object> keys = rollup.getKeys(record);
-                if (!groups.containsKey(keys)) {
-                    groups.put(keys, new List<Object>());
+                List<Object> records = groups.get(keys);
+                if (records == null) {
+                    groups.put(keys, new List<Object>{ record });
+                } else {
+                    records.add(record);
                 }
-                groups.get(keys).add(record);
             }
+
             List<Aggregate> rolledUpRecords = new List<Aggregate>();
-            for (List<Object> key : groups.keySet()) {
-                Map<String, Object> summary = rollup.summary(key, groups.get(key));
-                rolledUpRecords.add(new AggregateImpl(key, summary));
+            for (List<Object> keys : groups.keySet()) {
+                List<Object> records = groups.get(keys);
+                Map<String, Object> summary = rollup.summary(keys, records);
+                rolledUpRecords.add(new AggregateImpl(records, keys, summary));
             }
             this.listItemType = Aggregate.class;
             this.records = rolledUpRecords;
@@ -206,21 +231,28 @@ public virtual class Q implements IQ {
     // =================
     // #region Resulting
 
-    private List<Object> newList(Type listItemType) {
-        String listTypeName = 'List<' + listItemType.getName() + '>';
-        System.debug('listTypeName: ' + listTypeName);
-        Type listType = Type.forName(listTypeName);
-        return (List<Object>) listType.newInstance();
+    public Dictionary toDict(MapKey mapKey) {
+        Map<List<Object>, List<Object>> dict = new Map<List<Object>, List<Object>>();
+        for (Object record : this.records) {
+            List<Object> keys = mapKey.getKeys(record);
+            List<Object> records = dict.get(keys);
+            if (records == null) {
+                dict.put(keys, new List<Object>{ record });
+            } else {
+                records.add(record);
+            }
+        }
+        return new DictionaryImpl(dict);
     }
 
     public List<Object> toList() {
-        List<Object> records = newList(this.listItemType);
+        List<Object> records = COLLECTION.newList(this.listItemType);
         records.addAll(this.records);
         return records;
     }
 
     public List<Object> toList(Mapper mapper, Type mapToType) {
-        List<Object> records = newList(mapToType);
+        List<Object> records = COLLECTION.newList(mapToType);
 
         for (Object record : this.records) {
             records.add(mapper.convert(record));
@@ -243,13 +275,47 @@ public virtual class Q implements IQ {
     // ==========================
     // #region Supproting Classes
 
+    private class DictionaryImpl implements Dictionary {
+        private Map<List<Object>, List<Object>> dict { get; set; }
+
+        private DictionaryImpl(Map<List<Object>, List<Object>> dict) {
+            this.dict = dict;
+        }
+
+        public Integer size() {
+            return dict.size();
+        }
+
+        public Boolean isEmpty() {
+            return dict.isEmpty();
+        }
+
+        public Set<List<Object>> keySet() {
+            return dict.keySet();
+        }
+
+        public Boolean containsKey(List<Object> keys) {
+            return dict.containsKey(keys);
+        }
+
+        public List<Object> getRecords(List<Object> keys) {
+            return dict.get(keys);
+        }
+    }
+
     private class AggregateImpl implements Aggregate {
+        private List<Object> records { get; set; }
         private List<Object> keys { get; set; }
         private Map<String, Object> summary { get; set; }
 
-        private AggregateImpl(List<Object> keys, Map<String, Object> summary) {
+        private AggregateImpl(List<Object> records, List<Object> keys, Map<String, Object> summary) {
+            this.records = records;
             this.keys = keys;
             this.summary = summary;
+        }
+
+        public List<Object> getRecords() {
+            return records;
         }
 
         public List<Object> getKeys() {
@@ -270,16 +336,18 @@ public virtual class Q implements IQ {
     }
 
     @TestVisible
-    private class SObjectComparator implements Comparator<Object> {
-        private Sorter sorter { get; set; }
+    private class Collection {
+        private Map<Type, List<Object>> listCache = new Map<Type, List<Object>>();
 
-        @TestVisible
-        private SObjectComparator(Sorter sorter) {
-            this.sorter = sorter;
-        }
-
-        public Integer compare(Object arg1, Object arg2) {
-            return sorter.compare(arg1, arg2);
+        public List<Object> newList(Type listItemType) {
+            List<Object> defaultList = listCache.get(listItemType);
+            if (defaultList == null) {
+                String listTypeName = 'List<' + listItemType.getName() + '>';
+                Type listType = Type.forName(listTypeName);
+                defaultList = (List<Object>) listType.newInstance();
+                listCache.put(listItemType, defaultList);
+            }
+            return defaultList.clone();
         }
     }
 

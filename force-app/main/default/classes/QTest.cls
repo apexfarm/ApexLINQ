@@ -50,7 +50,22 @@ public class QTest {
 
     public class Model {
         public String Name { get; set; }
+        public String Industry { get; set; }
         public Double AnnualRevenue { get; set; }
+
+        public Model() {
+        }
+
+        public Model(String Name, Double AnnualRevenue) {
+            this.Name = Name;
+            this.AnnualRevenue = AnnualRevenue;
+        }
+
+        public Model(String Name, String Industry, Double AnnualRevenue) {
+            this.Name = Name;
+            this.Industry = Industry;
+            this.AnnualRevenue = AnnualRevenue;
+        }
     }
 
     // #endregion
@@ -92,6 +107,26 @@ public class QTest {
         }
     }
 
+    @isTest
+    static void testQ_filter_model() {
+        List<Model> accounts = new List<Model>();
+        for (Integer i = 0; i < 10; i++) {
+            accounts.add(new Model('Account ' + i, 5000 - i));
+        }
+
+        Q.Filter filter = new ModelFilter();
+        List<Model> results = (List<Model>) Q.of(accounts, Model.class).filter(filter).toList();
+
+        Assert.areEqual(10, results.size());
+    }
+
+    public class ModelFilter implements Q.Filter {
+        public Boolean matches(Object record) {
+            Model mod = (Model) record;
+            return mod.Name.startsWith('Account') && (Double) mod.AnnualRevenue > 0;
+        }
+    }
+
     // #endregion
     // ==============
 
@@ -101,16 +136,16 @@ public class QTest {
     @isTest
     static void testQ_sorter() {
         List<Account> accounts = new List<Account>();
-        for (Integer i = 0; i < 10; i++) {
+        for (Integer i = 0; i < 5000; i++) {
             accounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 5000 - i));
         }
 
         Q.Sorter sorter = new AccountSorter();
         List<Account> results = (List<Account>) Q.of(accounts).sortBy(sorter).toList();
 
-        Assert.areEqual(10, results.size());
-        Assert.areEqual(4991, results[0].AnnualRevenue);
-        Assert.areEqual(5000, results[9].AnnualRevenue);
+        Assert.areEqual(5000, results.size());
+        Assert.areEqual(1, results[0].AnnualRevenue);
+        Assert.areEqual(5000, results[4999].AnnualRevenue);
     }
 
     public class AccountSorter implements Q.Sorter {
@@ -311,6 +346,7 @@ public class QTest {
             }
             Assert.areEqual(1, aggregate.getKeys().size());
             Assert.areEqual(3, aggregate.getSummary().size());
+            Assert.areEqual(5, aggregate.getRecords().size());
             count++;
         }
         Assert.areEqual(2, count);
@@ -322,7 +358,7 @@ public class QTest {
             return new List<Object>{ acc.Industry };
         }
 
-        public Map<String, Object> summary(List<Object> mapKeys, List<Object> records) {
+        public Map<String, Object> summary(List<Object> keys, List<Object> records) {
             Map<String, Object> results = new Map<String, Object>();
             Double sumRevenue = 0;
             Double maxRevenue = 0;
@@ -342,61 +378,6 @@ public class QTest {
 
     // #endregion
     // ==============
-
-    // ==============
-    // #region Mapper
-    @isTest
-    static void testQ_mapper() {
-        List<Account> accounts = new List<Account>();
-        for (Integer i = 0; i < 10; i++) {
-            accounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 10000 + i));
-        }
-
-        Q.Filter filter = new AccountFilter();
-        Q.Sorter sorter = new AccountSorter();
-        Q.Mapper mapper = new AccountMapper();
-        List<Id> results = (List<Id>) Q.of(accounts).filter(filter).sortBy(sorter).toList(mapper, Id.class);
-
-        Assert.areEqual(10, results.size());
-    }
-
-    public class AccountMapper implements Q.Mapper {
-        public Object convert(Object record) {
-            Account acc = (Account) record;
-            return acc.Id;
-        }
-    }
-
-    // #endregion
-    // ==============
-
-    // ===============
-    // #region Reducer
-
-    @isTest
-    static void testQ_reducer() {
-        List<Account> accounts = new List<Account>();
-        for (Integer i = 0; i < 10; i++) {
-            accounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 1));
-        }
-
-        Q.Filter filter = new AccountFilter();
-        Q.Reducer reducer = new AccountReducer();
-        Double results = (Double) Q.of(accounts).filter(filter).reduce(reducer, 0.0);
-
-        Assert.areEqual(10, results);
-    }
-
-    public class AccountReducer implements Q.Reducer {
-        public Object reduce(Object state, Object record) {
-            Double currentSum = (Double) state;
-            Account acc = (Account) record;
-            return currentSum + (Double) acc.AnnualRevenue;
-        }
-    }
-
-    // #endregion
-    // ===============
 
     // ==============
     // #region Differ
@@ -480,8 +461,137 @@ public class QTest {
     // #endregion
     // ==============
 
-    // // ===================
-    // // #region Performance
+    // ==============
+    // #region Mapper
+    @isTest
+    static void testQ_mapper() {
+        List<Account> accounts = new List<Account>();
+        for (Integer i = 0; i < 10; i++) {
+            accounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 10000 + i));
+        }
+
+        Q.Filter filter = new AccountFilter();
+        Q.Sorter sorter = new AccountSorter();
+        Q.Mapper mapper = new AccountMapper();
+        List<Id> results = (List<Id>) Q.of(accounts).filter(filter).sortBy(sorter).toList(mapper, Id.class);
+
+        Assert.areEqual(10, results.size());
+    }
+
+    public class AccountMapper implements Q.Mapper {
+        public Object convert(Object record) {
+            Account acc = (Account) record;
+            return acc.Id;
+        }
+    }
+
+    // #endregion
+    // ==============
+
+    // ===============
+    // #region Reducer
+
+    @isTest
+    static void testQ_reducer() {
+        List<Account> accounts = new List<Account>();
+        for (Integer i = 0; i < 10; i++) {
+            accounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 1));
+        }
+
+        Q.Filter filter = new AccountFilter();
+        Q.Reducer reducer = new AccountReducer();
+        Double results = (Double) Q.of(accounts).filter(filter).reduce(reducer, 0.0);
+
+        Assert.areEqual(10, results);
+    }
+
+    public class AccountReducer implements Q.Reducer {
+        public Object reduce(Object state, Object record) {
+            Double currentSum = (Double) state;
+            Account acc = (Account) record;
+            return currentSum + (Double) acc.AnnualRevenue;
+        }
+    }
+
+    // #endregion
+    // ===============
+
+    // ==============
+    // #region toDict
+
+    @isTest
+    static void testQ_toDict() {
+        List<Account> accounts = new List<Account>();
+        for (Integer i = 0; i < 5000; i++) {
+            accounts.add(
+                new Account(
+                    Name = 'Account ' + i,
+                    AnnualRevenue = 10000 + i,
+                    Industry = (Math.mod(i, 2) == 0) ? 'IT' : 'Finance'
+                )
+            );
+        }
+
+        Integer startCPU = Limits.getCpuTime();
+
+        Q.MapKey mapKey = new AccountMapKey();
+        Q.Dictionary results = Q.of(accounts).toDict(mapKey);
+
+        Integer endCPU = Limits.getCpuTime();
+        System.debug(LoggingLevel.INFO, 'Apex LINQ (CPU): ' + (endCPU - startCPU));
+
+        Assert.areEqual(2, results.keySet().size());
+        Assert.areEqual(2, results.size());
+        Assert.isTrue(results.containsKey(new List<Object>{ 'IT' }));
+        Assert.isFalse(results.isEmpty());
+
+        List<Object> itAccounts = results.getRecords(new List<Object>{ 'IT' });
+        Assert.areEqual(2500, itAccounts.size());
+        List<Object> financeAccounts = results.getRecords(new List<Object>{ 'Finance' });
+        Assert.areEqual(2500, financeAccounts.size());
+    }
+
+    public class AccountMapKey implements Q.MapKey {
+        public List<Object> getKeys(Object record) {
+            Account acc = (Account) record;
+            return new List<Object>{ acc.Industry };
+        }
+    }
+
+    // #endregion
+    // ===============
+
+    // ===================
+    // #region Performance
+
+    // @isTest
+    // static void testQ_performance_nativeLoop() {
+    //     String listTypeName = 'List<Account>';
+    //     Type listType = Type.forName(listTypeName);
+    //     List<Object> accounts = (List<Object>) listType.newInstance();
+
+    //     Integer startCPU = Limits.getCpuTime();
+    //     for (Integer i = 0; i < 10000; i++) {
+    //         List<Object> accounts2 = accounts.clone();
+    //     }
+
+    //     Integer endCPU = Limits.getCpuTime();
+    //     System.debug(LoggingLevel.INFO, 'Native Apex (CPU): ' + (endCPU - startCPU));
+    // }
+
+    // @isTest
+    // static void testQ_performance_nativeLoop2() {
+    //     Q.Collection collection = new Q.Collection();
+
+    //     Integer startCPU = Limits.getCpuTime();
+    //     for (Integer i = 0; i < 10000; i++) {
+    //         collection.newList(SObject.class);
+    //     }
+
+    //     Integer endCPU = Limits.getCpuTime();
+    //     System.debug(LoggingLevel.INFO, 'Native Apex (CPU): ' + (endCPU - startCPU));
+    // }
+
     // @isTest
     // static void testQ_performance_nativeFilter() {
     //     List<Account> accounts = new List<Account>();
@@ -489,22 +599,19 @@ public class QTest {
     //         accounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 5000 - i));
     //     }
 
-    //     Test.startTest();
+    //     Integer startCPU = Limits.getCpuTime();
     //     List<Account> results = new List<Account>();
     //     for (Account acc : accounts) {
-    //         if (
-    //             acc.Name.startsWith('Account') &&
-    //             acc.Name.startsWith('Account') &&
-    //             acc.Name.startsWith('Account') &&
-    //             acc.Name.startsWith('Account') &&
-    //             (Double) acc.AnnualRevenue > 0
-    //         ) {
+    //         if (acc.Name.startsWith('Account') && (Double) acc.AnnualRevenue > 0) {
     //             results.add(acc);
     //         }
     //     }
-    //     Test.stopTest();
+    //     Integer endCPU = Limits.getCpuTime();
+    //     System.debug(LoggingLevel.INFO, 'Native Apex (CPU): ' + (endCPU - startCPU));
 
     //     Assert.areEqual(5000, results.size());
+    //     Assert.areEqual(5000, results[0].AnnualRevenue);
+    //     Assert.areEqual(1, results[4999].AnnualRevenue);
     // }
 
     // @isTest
@@ -514,10 +621,11 @@ public class QTest {
     //         accounts.add(new Account(Name = 'Account ' + i, AnnualRevenue = 5000 - i));
     //     }
 
-    //     Test.startTest();
+    //     Integer startCPU = Limits.getCpuTime();
     //     Q.Filter filter = new AccountFilter();
     //     List<Account> results = (List<Account>) Q.of(accounts).filter(filter).toList();
-    //     Test.stopTest();
+    //     Integer endCPU = Limits.getCpuTime();
+    //     System.debug(LoggingLevel.INFO, 'Apex LINQ (CPU): ' + (endCPU - startCPU));
 
     //     Assert.areEqual(5000, results.size());
     //     Assert.areEqual(5000, results[0].AnnualRevenue);
@@ -527,42 +635,45 @@ public class QTest {
     // @isTest
     // static void testQ_performance_rollup() {
     //     List<Account> accounts = new List<Account>();
-    //     for (Integer i = 0; i < 10000; i++) {
+    //     for (Integer i = 0; i < 5000; i++) {
     //         accounts.add(
     //             new Account(
     //                 Name = 'Account ' + i,
-    //                 AnnualRevenue = 10000 + i,
+    //                 AnnualRevenue = 5000 + i,
     //                 Industry = (Math.mod(i, 2) == 0) ? 'IT' : 'Finance'
     //             )
     //         );
     //     }
 
-    //     Test.startTest();
+    //     Integer startCPU = Limits.getCpuTime();
     //     Q.Rollup rollup = new PerformanceAccountRollup();
     //     List<Q.Aggregate> results = (List<Q.Aggregate>) Q.of(accounts).rollup(rollup).toList();
 
-    //     Assert.areEqual(10000, results.size());
+    //     Assert.areEqual(5000, results.size());
 
     //     Integer count = 0;
-    //     Integer IndustryIndex = 0;
+    //     Integer NAME_INDEX = 0;
+    //     Integer INDUSTRY_INDEX = 1;
     //     for (Q.Aggregate aggregate : results) {
-    //         String industry = (String) aggregate.getKeyAt(IndustryIndex);
+    //         String accountName = (String) aggregate.getKeyAt(NAME_INDEX);
+    //         String industry = (String) aggregate.getKeyAt(INDUSTRY_INDEX);
     //         Double maxRevenue = (Double) aggregate.getValue('MaxRevenue');
     //         Double sumRevenue = (Double) aggregate.getValue('SumRevenue');
     //         Double avgRevenue = (Double) aggregate.getValue('AvgRevenue');
     //         count++;
     //     }
-    //     Assert.areEqual(10000, count);
-    //     Test.stopTest();
+    //     Assert.areEqual(5000, count);
+    //     Integer endCPU = Limits.getCpuTime();
+    //     System.debug(LoggingLevel.INFO, 'Apex LINQ (CPU): ' + (endCPU - startCPU));
     // }
 
     // public class PerformanceAccountRollup implements Q.Rollup {
     //     public List<Object> getKeys(Object record) {
     //         Account acc = (Account) record;
-    //         return new List<Object>{ acc.Name };
+    //         return new List<Object>{ acc.Name, acc.Industry, acc.AnnualRevenue };
     //     }
 
-    //     public Map<String, Object> summary(List<Object> mapKeys, List<Object> records) {
+    //     public Map<String, Object> summary(List<Object> keys, List<Object> records) {
     //         Map<String, Object> results = new Map<String, Object>();
     //         Double sumRevenue = 0;
     //         Double maxRevenue = 0;
@@ -580,6 +691,6 @@ public class QTest {
     //     }
     // }
 
-    // // #endregion
-    // // ===================
+    // #endregion
+    // ===================
 }
