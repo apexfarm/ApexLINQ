@@ -19,7 +19,7 @@ public virtual class Q implements IQ {
     private interface IQ {
         List<Object> toList();
         List<Object> toList(Mapper mapper, Type mapToType);
-        Dictionary toDict(MapKey mapKey);
+        Dictionary toDict(ByKeys byKeys);
         Object reduce(Reducer reducer, Object initialState);
 
         Q diff(Differ differ, List<Object> toRecords);
@@ -52,11 +52,11 @@ public virtual class Q implements IQ {
         Integer compare(Object arg1, Object arg2);
     }
 
-    public interface MapKey {
+    public interface ByKeys {
         List<Object> getKeys(Object record);
     }
 
-    public interface Rollup extends MapKey {
+    public interface Rollup extends ByKeys {
         Map<String, Object> summary(List<Object> keys, List<Object> records);
     }
 
@@ -231,10 +231,10 @@ public virtual class Q implements IQ {
     // =================
     // #region Resulting
 
-    public Dictionary toDict(MapKey mapKey) {
+    public Dictionary toDict(ByKeys byKeys) {
         Map<List<Object>, List<Object>> dict = new Map<List<Object>, List<Object>>();
         for (Object record : this.records) {
-            List<Object> keys = mapKey.getKeys(record);
+            List<Object> keys = byKeys.getKeys(record);
             List<Object> records = dict.get(keys);
             if (records == null) {
                 dict.put(keys, new List<Object>{ record });

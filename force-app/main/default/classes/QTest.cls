@@ -534,8 +534,8 @@ public class QTest {
 
         Integer startCPU = Limits.getCpuTime();
 
-        Q.MapKey mapKey = new AccountMapKey();
-        Q.Dictionary results = Q.of(accounts).toDict(mapKey);
+        Q.ByKeys byKeys = new AccountByKeys();
+        Q.Dictionary results = Q.of(accounts).toDict(byKeys);
 
         Integer endCPU = Limits.getCpuTime();
         System.debug(LoggingLevel.INFO, 'Apex LINQ (CPU): ' + (endCPU - startCPU));
@@ -551,7 +551,7 @@ public class QTest {
         Assert.areEqual(2500, financeAccounts.size());
     }
 
-    public class AccountMapKey implements Q.MapKey {
+    public class AccountByKeys implements Q.ByKeys {
         public List<Object> getKeys(Object record) {
             Account acc = (Account) record;
             return new List<Object>{ acc.Industry };
