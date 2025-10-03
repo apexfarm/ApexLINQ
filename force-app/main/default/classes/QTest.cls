@@ -507,9 +507,8 @@ public class QTest {
 
     public class AccountReducer implements Q.Reducer {
         public Object reduce(Object state, Object record) {
-            Double currentSum = (Double) state;
             Account acc = (Account) record;
-            return currentSum + (Double) acc.AnnualRevenue;
+            return (Double) state + (Double) acc.AnnualRevenue;
         }
     }
 
@@ -517,10 +516,10 @@ public class QTest {
     // ===============
 
     // ==============
-    // #region toDict
+    // #region groups
 
     @isTest
-    static void testQ_toDict() {
+    static void testQ_groups() {
         List<Account> accounts = new List<Account>();
         for (Integer i = 0; i < 5000; i++) {
             accounts.add(
@@ -535,20 +534,30 @@ public class QTest {
         Integer startCPU = Limits.getCpuTime();
 
         Q.ByKeys byKeys = new AccountByKeys();
-        Q.Dictionary results = Q.of(accounts).toDict(byKeys);
+        Q.Groups groups = Q.of(accounts).groups(byKeys);
 
         Integer endCPU = Limits.getCpuTime();
         System.debug(LoggingLevel.INFO, 'Apex LINQ (CPU): ' + (endCPU - startCPU));
 
-        Assert.areEqual(2, results.keySet().size());
-        Assert.areEqual(2, results.size());
-        Assert.isTrue(results.containsKey(new List<Object>{ 'IT' }));
-        Assert.isFalse(results.isEmpty());
+        Assert.areEqual(2, groups.keySet().size());
+        Assert.areEqual(2, groups.size());
+        Assert.isTrue(groups.containsKey(new List<Object>{ 'IT' }));
+        Assert.isFalse(groups.isEmpty());
 
-        List<Object> itAccounts = results.getRecords(new List<Object>{ 'IT' });
+        List<Object> itAccounts = groups.getRecords(new List<Object>{ 'IT' });
         Assert.areEqual(2500, itAccounts.size());
-        List<Object> financeAccounts = results.getRecords(new List<Object>{ 'Finance' });
+        List<Object> financeAccounts = groups.getRecords(new List<Object>{ 'Finance' });
         Assert.areEqual(2500, financeAccounts.size());
+
+        Integer count = 0;
+        Integer INDUSTRY_INDEX = 0;
+        for (Q.GroupInfo groupInfo : groups) {
+            String industry = (String) groupInfo.getKeyAt(INDUSTRY_INDEX);
+            List<Object> groupRecords = groupInfo.getRecords();
+            Assert.areEqual(2500, groupRecords.size());
+            count++;
+        }
+        Assert.areEqual(2, count);
     }
 
     public class AccountByKeys implements Q.ByKeys {

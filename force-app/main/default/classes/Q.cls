@@ -19,7 +19,7 @@ public virtual class Q implements IQ {
     private interface IQ {
         List<Object> toList();
         List<Object> toList(Mapper mapper, Type mapToType);
-        Dictionary toDict(ByKeys byKeys);
+        Groups groups(ByKeys byKeys);
         Object reduce(Reducer reducer, Object initialState);
 
         Q diff(Differ differ, List<Object> toRecords);
@@ -64,17 +64,21 @@ public virtual class Q implements IQ {
         Boolean changed(Object arg1, Object arg2);
     }
 
-    public interface Aggregate {
-        List<Object> getKeys();
-        List<Object> getRecords();
+    public interface Aggregate extends GroupInfo {
         Map<String, Object> getSummary();
-        Object getKeyAt(Integer position);
         Object getValue(String fieldName);
     }
 
-    public interface Dictionary {
+    public interface GroupInfo {
+        List<Object> getKeys();
+        Object getKeyAt(Integer position);
+        List<Object> getRecords();
+    }
+
+    public interface Groups extends Iterable<GroupInfo> {
         Integer size();
         Boolean isEmpty();
+
         Set<List<Object>> keySet();
         List<Object> getRecords(List<Object> keys);
         Boolean containsKey(List<Object> keys);
@@ -231,18 +235,18 @@ public virtual class Q implements IQ {
     // =================
     // #region Resulting
 
-    public Dictionary toDict(ByKeys byKeys) {
-        Map<List<Object>, List<Object>> dict = new Map<List<Object>, List<Object>>();
+    public Groups groups(ByKeys byKeys) {
+        Map<List<Object>, List<Object>> groups = new Map<List<Object>, List<Object>>();
         for (Object record : this.records) {
             List<Object> keys = byKeys.getKeys(record);
-            List<Object> records = dict.get(keys);
+            List<Object> records = groups.get(keys);
             if (records == null) {
-                dict.put(keys, new List<Object>{ record });
+                groups.put(keys, new List<Object>{ record });
             } else {
                 records.add(record);
             }
         }
-        return new DictionaryImpl(dict);
+        return new GroupsImpl(groups);
     }
 
     public List<Object> toList() {
@@ -275,59 +279,89 @@ public virtual class Q implements IQ {
     // ==========================
     // #region Supproting Classes
 
-    private class DictionaryImpl implements Dictionary {
-        private Map<List<Object>, List<Object>> dict { get; set; }
+    private class GroupsImpl implements Groups {
+        private Map<List<Object>, List<Object>> groups { get; set; }
 
-        private DictionaryImpl(Map<List<Object>, List<Object>> dict) {
-            this.dict = dict;
+        private GroupsImpl(Map<List<Object>, List<Object>> groups) {
+            this.groups = groups;
         }
 
         public Integer size() {
-            return dict.size();
+            return groups.size();
         }
 
         public Boolean isEmpty() {
-            return dict.isEmpty();
+            return groups.isEmpty();
         }
 
         public Set<List<Object>> keySet() {
-            return dict.keySet();
+            return groups.keySet();
         }
 
         public Boolean containsKey(List<Object> keys) {
-            return dict.containsKey(keys);
+            return groups.containsKey(keys);
         }
 
         public List<Object> getRecords(List<Object> keys) {
-            return dict.get(keys);
+            return groups.get(keys);
+        }
+
+        public Iterator<GroupInfo> iterator() {
+            return new GroupsIterator(this.groups);
         }
     }
 
-    private class AggregateImpl implements Aggregate {
-        private List<Object> records { get; set; }
-        private List<Object> keys { get; set; }
-        private Map<String, Object> summary { get; set; }
+    private class GroupsIterator implements Iterator<GroupInfo> {
+        private Iterator<List<Object>> keyIterator { get; set; }
+        private Map<List<Object>, List<Object>> groups { get; set; }
 
-        private AggregateImpl(List<Object> records, List<Object> keys, Map<String, Object> summary) {
-            this.records = records;
-            this.keys = keys;
-            this.summary = summary;
+        private GroupsIterator(Map<List<Object>, List<Object>> groups) {
+            this.groups = groups;
+            this.keyIterator = groups.keySet().iterator();
         }
 
-        public List<Object> getRecords() {
-            return records;
+        public Boolean hasNext() {
+            return keyIterator.hasNext();
+        }
+
+        public GroupInfo next() {
+            List<Object> keys = keyIterator.next();
+            return new GroupInfoImpl(keys, groups.get(keys));
+        }
+    }
+
+    private virtual class GroupInfoImpl implements GroupInfo {
+        protected List<Object> keys { get; set; }
+        protected List<Object> records { get; set; }
+
+        private GroupInfoImpl(List<Object> keys, List<Object> records) {
+            this.keys = keys;
+            this.records = records;
         }
 
         public List<Object> getKeys() {
             return keys;
         }
 
-        public Map<String, Object> getSummary() {
-            return summary;
-        }
-
         public Object getKeyAt(Integer position) {
             return keys[position];
+        }
+
+        public List<Object> getRecords() {
+            return records;
+        }
+    }
+
+    private class AggregateImpl extends GroupInfoImpl implements Aggregate {
+        private Map<String, Object> summary { get; set; }
+
+        private AggregateImpl(List<Object> records, List<Object> keys, Map<String, Object> summary) {
+            super(keys, records);
+            this.summary = summary;
+        }
+
+        public Map<String, Object> getSummary() {
+            return summary;
         }
 
         public Object getValue(String fieldName) {

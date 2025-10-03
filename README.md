@@ -1,15 +1,21 @@
 # Apex LINQ
 
-![](https://img.shields.io/badge/version-1.1.1-brightgreen.svg) ![](https://img.shields.io/badge/build-passing-brightgreen.svg) ![](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
+![](https://img.shields.io/badge/version-1.2.0-brightgreen.svg) ![](https://img.shields.io/badge/build-passing-brightgreen.svg) ![](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
 
 Apex LINQ is a high-performance Salesforce LINQ library designed to work seamlessly with object collections, delivering performance close to native operations. For optimal results, refer to the guidelines in [Apex CPU Limit Optimization](https://medium.com/@jeff.jianfeng.jin/apex-cpu-limit-optimization-9451e9c4b79c).
 
-| Environment           | Installation Link                                                                                                                                         | Version   |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| Production, Developer | <a target="_blank" href="https://login.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPtZYAW"><img src="docs/images/deploy-button.png"></a> | ver 1.1.1 |
-| Sandbox               | <a target="_blank" href="https://test.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPtZYAW"><img src="docs/images/deploy-button.png"></a>  | ver 1.1.1 |
+| Environment           | Installation Link                                                                                                                                         | Version |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Production, Developer | <a target="_blank" href="https://login.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPu8YAG"><img src="docs/images/deploy-button.png"></a> | ver 1.2 |
+| Sandbox               | <a target="_blank" href="https://test.salesforce.com/packaging/installPackage.apexp?p0=04tGC000007TPu8YAG"><img src="docs/images/deploy-button.png"></a>  | ver 1.2 |
 
 ---
+
+### Release Notes
+
+**v1.2**:
+
+- [Groups](#34-groups): Introduced the `Q.groups(byKeys)` API, which allows grouping records by keys.
 
 ## Table of Contents
 
@@ -26,7 +32,12 @@ Apex LINQ is a high-performance Salesforce LINQ library designed to work seamles
   - [3.1 List](#31-list)
   - [3.2 Mapper](#32-mapper)
   - [3.3 Reduce](#33-reduce)
-- [4. License](#4-license)
+  - [3.4 Groups](#34-groups)
+- [4. APIs](#4-apis)
+  - [4.1 Q.Groups](#41-qgroups)
+  - [4.2 Q.GroupInfo](#42-qgroupinfo)
+  - [4.3 Q.Aggregate](#43-qaggregate)
+- [5. License](#5-license)
 
 ## 1. Collection Types
 
@@ -166,6 +177,7 @@ List<Q.Aggregate> results = (List<Q.Aggregate>) Q.of(accounts)
 Integer INDUSTRY_INDEX = 0;
 for (Q.Aggregate aggregate : results) {
     String industry = (String) aggregate.getKeyAt(INDUSTRY_INDEX);
+    List<Object> records = aggregate.getRecords();
     Double maxRevenue = (Double) aggregate.getValue('MaxRevenue');
     Double sumRevenue = (Double) aggregate.getValue('SumRevenue');
     Double avgRevenue = (Double) aggregate.getValue('AvgRevenue');
@@ -243,9 +255,8 @@ To accumulate results, implement the `Q.Reducer` interface.
 ```java
 public class AccountReducer implements Q.Reducer {
     public Object reduce(Object state, Object record) {
-        Double currentSum = (Double) state;
         Account acc = (Account) record;
-        return currentSum + (Double) acc.AnnualRevenue;
+        return (Double) state + (Double) acc.AnnualRevenue;
     }
 }
 ```
@@ -259,6 +270,69 @@ Q.Reducer reducer = new AccountReducer();
 Double result = (Double) Q.of(accounts).filter(filter).reduce(reducer, 0.0);
 ```
 
-## 4. License
+### 3.4 Groups
+
+Groups allow you to organize records by specified keys, similar to rollup, but without performing aggregation. To group records, implement the `Q.ByKeys` interface:
+
+```java
+public class AccountByKeys implements Q.ByKeys {
+    public List<Object> getKeys(Object record) {
+        Account acc = (Account) record;
+        return new List<Object>{ acc.Industry };
+    }
+}
+```
+
+Use grouping as shown below to obtain `Q.Groups`, which support both map-like and list-like access.
+
+```java
+Q.ByKeys byKeys = new AccountByKeys();
+Q.Groups groups = Q.of(accounts).groups(byKeys);
+
+// Access records by group keys (map-like)
+Set<List<Object>> keySet = groups.keySet();
+List<Object> records = groups.getRecords(new List<Object>{ 'IT' });
+
+// Iterate over groups (list-like)
+Integer INDUSTRY_INDEX = 0;
+for (Q.GroupInfo groupInfo : groups) {
+    String industry = (String) groupInfo.getKeyAt(INDUSTRY_INDEX);
+    List<Object> records = groupInfo.getRecords();
+}
+```
+
+## 4. APIs
+
+### 4.1 Q.Groups
+
+| Method                           | Return Type         | Description                                                          |
+| -------------------------------- | ------------------- | -------------------------------------------------------------------- |
+| `size()`                         | `Integer`           | Returns the number of groups.                                        |
+| `isEmpty()`                      | `Boolean`           | Returns `true` if there are no groups, otherwise `false`.            |
+| `keySet()`                       | `Set<List<Object>>` | Returns the set of all group keys.                                   |
+| `getRecords(List<Object> keys)`  | `List<Object>`      | Returns the list of records for the specified group keys.            |
+| `containsKey(List<Object> keys)` | `Boolean`           | Returns `true` if the specified group keys exist, otherwise `false`. |
+
+### 4.2 Q.GroupInfo
+
+| Method                       | Return Type    | Description                                                      |
+| ---------------------------- | -------------- | ---------------------------------------------------------------- |
+| `getKeys()`                  | `List<Object>` | Returns the keys for this group.                                 |
+| `getKeyAt(Integer position)` | `Object`       | Returns the key at the specified position in the group key list. |
+| `getRecords()`               | `List<Object>` | Returns the list of records in this group.                       |
+
+### 4.3 Q.Aggregate
+
+`Q.Aggregate` inherits all methods from `Q.GroupInfo` and adds additional summary operations.
+
+| Method                       | Return Type           | Description                                                          |
+| ---------------------------- | --------------------- | -------------------------------------------------------------------- |
+| `getKeys()`                  | `List<Object>`        | Returns the keys for this aggregate group.                           |
+| `getKeyAt(Integer position)` | `Object`              | Returns the key at the specified position in the aggregate key list. |
+| `getRecords()`               | `List<Object>`        | Returns the list of records in this aggregate group.                 |
+| `getSummary()`               | `Map<String, Object>` | Returns the summary map containing aggregated values for the group.  |
+| `getValue(String fieldName)` | `Object`              | Returns the aggregated value for the specified summary field name.   |
+
+## 5. License
 
 Apache 2.0
